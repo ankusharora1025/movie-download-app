@@ -11,7 +11,8 @@ st.set_page_config(
 
 supabase = create_client(
     st.secrets["SUPABASE_URL"],
-    st.secrets["SUPABASE_KEY"]
+    st.secrets["SUPABASE_ADMIN_KEY"]
+)
 )
 
 # -------------------------
