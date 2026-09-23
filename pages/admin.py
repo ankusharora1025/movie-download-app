@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-st.success("TEST: CINEMAHUB NEW APP.PY IS RUNNING")
+
 # =====================================================
 # SUPABASE
 # =====================================================
@@ -603,7 +603,3 @@ st.markdown("---")
 st.caption(
     "© 2026 CinemaHub • Movies • Series • Entertainment"
 )
-
-# CinemaHub deployment refresh
-
-# CinemaHub v2
