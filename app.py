@@ -300,9 +300,9 @@ else:
         4
     ):
 
-        cols = st.columns(4)
+        cols = st.columns(3)
 
-        row = filtered_movies[start:start + 4]
+        row = filtered_movies[start:start + 3]
 
         for index, movie in enumerate(row):
 
