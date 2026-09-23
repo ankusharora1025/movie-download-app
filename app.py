@@ -1,60 +1,114 @@
 import streamlit as st
 from supabase import create_client
+import html
+
+# =====================================================
+# PAGE CONFIG
+# =====================================================
 
 st.set_page_config(
     page_title="CinemaHub",
     page_icon="🎬",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-# -------------------------
+# =====================================================
 # SUPABASE
-# -------------------------
+# =====================================================
+
 supabase = create_client(
     st.secrets["SUPABASE_URL"],
     st.secrets["SUPABASE_KEY"]
 )
 
-# -------------------------
-# STYLE
-# -------------------------
-st.markdown("""
-<style>
+# =====================================================
+# CUSTOM CSS
+# =====================================================
 
-.block-container {
-    max-width: 1400px;
-    padding-top: 2rem;
-}
+st.markdown(
+    """
+    <style>
 
-.movie-card {
-    padding: 8px;
-    margin-bottom: 25px;
-}
+    .block-container {
+        max-width: 1450px;
+        padding-top: 2rem;
+        padding-bottom: 4rem;
+    }
 
-.movie-title {
-    font-size: 20px;
-    font-weight: 700;
-    margin-top: 8px;
-}
+    .movie-title {
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1.3;
+        margin-top: 12px;
+        margin-bottom: 4px;
+        min-height: 52px;
+    }
 
-.movie-info {
-    color: #999;
-    font-size: 14px;
-}
+    .movie-meta {
+        color: #9da3ae;
+        font-size: 14px;
+        margin-bottom: 10px;
+    }
 
-div.stButton > button {
-    width: 100%;
-}
+    .movie-poster {
+        width: 100%;
+        height: 420px;
+        overflow: hidden;
+        border-radius: 14px;
+        background: #171a21;
+    }
 
-</style>
-""", unsafe_allow_html=True)
+    .movie-poster img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center top;
+        display: block;
+    }
 
-# -------------------------
-# DATABASE
-# -------------------------
+    .no-poster {
+        width: 100%;
+        height: 420px;
+        border-radius: 14px;
+        background: #19324a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #54a6ff;
+        font-size: 18px;
+        font-weight: 600;
+    }
+
+    .rating {
+        display: inline-block;
+        background: #242832;
+        border-radius: 7px;
+        padding: 5px 9px;
+        margin-top: 4px;
+        margin-bottom: 10px;
+        font-size: 13px;
+    }
+
+    div[data-testid="stButton"] button {
+        border-radius: 10px;
+        min-height: 45px;
+        font-weight: 600;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# =====================================================
+# LOAD MOVIES
+# =====================================================
+
 try:
     response = (
-        supabase.table("movies")
+        supabase
+        .table("movies")
         .select("*")
         .order("created_at", desc=True)
         .execute()
@@ -63,228 +117,286 @@ try:
     movies = response.data or []
 
 except Exception as e:
-    st.error("Could not load movies.")
+    st.error("Could not connect to the movie database.")
     st.code(str(e))
     st.stop()
 
 
-# -------------------------
-# MOVIE DETAIL PAGE
-# -------------------------
+# =====================================================
+# MOVIE DETAILS PAGE
+# =====================================================
+
 selected_slug = st.query_params.get("movie")
 
 if selected_slug:
 
-    movie = next(
-        (m for m in movies if m["slug"] == selected_slug),
+    selected_movie = next(
+        (
+            movie
+            for movie in movies
+            if movie.get("slug") == selected_slug
+        ),
         None
     )
 
-    if not movie:
+    if selected_movie is None:
+
         st.error("Movie not found.")
+
+        if st.button("← Back to CinemaHub"):
+            st.query_params.clear()
+            st.rerun()
+
         st.stop()
 
-    if st.button("← Back to Movies"):
+    if st.button("← Back to CinemaHub"):
         st.query_params.clear()
         st.rerun()
 
     st.markdown("---")
 
-    poster_col, info_col = st.columns([1, 2])
+    left, right = st.columns(
+        [1, 2],
+        gap="large"
+    )
 
-    with poster_col:
+    with left:
 
-        if movie.get("poster_url"):
-            st.image(
-                movie["poster_url"],
-                use_container_width=True
+        poster_url = selected_movie.get("poster_url")
+
+        if poster_url:
+
+            safe_poster = html.escape(
+                str(poster_url),
+                quote=True
             )
+
+            st.markdown(
+                f"""
+                <div class="movie-poster"
+                     style="height:560px;">
+                    <img src="{safe_poster}">
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
         else:
-            st.info("No poster available")
 
-    with info_col:
+            st.markdown(
+                """
+                <div class="no-poster"
+                     style="height:560px;">
+                    🎬 No Poster
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-        st.title(movie["title"])
+    with right:
+
+        title = html.escape(
+            str(
+                selected_movie.get("title")
+                or "Untitled"
+            )
+        )
+
+        st.title(title)
 
         details = []
 
-        if movie.get("year"):
-            details.append(str(movie["year"]))
-
-        if movie.get("language"):
-            details.append(movie["language"])
-
-        if movie.get("category"):
-            details.append(movie["category"])
-
-        if details:
-            st.write(" • ".join(details))
-
-        if movie.get("imdb_rating"):
-            st.markdown(
-                f"⭐ **IMDb Rating:** {movie['imdb_rating']}/10"
+        if selected_movie.get("year"):
+            details.append(
+                str(selected_movie["year"])
             )
 
-        st.markdown("### About")
+        if selected_movie.get("language"):
+            details.append(
+                str(selected_movie["language"])
+            )
 
-        if movie.get("description"):
-            st.write(movie["description"])
-        else:
-            st.write("No description available.")
+        if selected_movie.get("category"):
+            details.append(
+                str(selected_movie["category"])
+            )
 
-        st.markdown("---")
+        if details:
+            st.caption(
+                " • ".join(details)
+            )
 
-        st.subheader("⬇️ Download Options")
+        rating = selected_movie.get(
+            "imdb_rating"
+        )
 
-        download_found = False
+        if rating:
+            st.markdown(
+                f"⭐ **IMDb {rating} / 10**"
+            )
 
-        if movie.get("quality_480p"):
+        description = selected_movie.get(
+            "description"
+        )
+
+        if description:
+            st.markdown("### About")
+            st.write(description)
+
+        st.markdown("### ⬇️ Download")
+
+        download_available = False
+
+        url_480 = selected_movie.get(
+            "quality_480p"
+        )
+
+        size_480 = selected_movie.get(
+            "file_size_480p"
+        )
+
+        if url_480:
+
+            download_available = True
 
             label = "⬇️ Download 480p"
 
-            if movie.get("file_size_480p"):
-                label += f" — {movie['file_size_480p']}"
+            if size_480:
+                label += f" • {size_480}"
 
             st.link_button(
                 label,
-                movie["quality_480p"],
-                use_container_width=True
+                url_480,
+                width="stretch"
             )
 
-            download_found = True
+        url_720 = selected_movie.get(
+            "quality_720p"
+        )
 
-        if movie.get("quality_720p"):
+        size_720 = selected_movie.get(
+            "file_size_720p"
+        )
+
+        if url_720:
+
+            download_available = True
 
             label = "⬇️ Download 720p"
 
-            if movie.get("file_size_720p"):
-                label += f" — {movie['file_size_720p']}"
+            if size_720:
+                label += f" • {size_720}"
 
             st.link_button(
                 label,
-                movie["quality_720p"],
-                use_container_width=True
+                url_720,
+                width="stretch"
             )
 
-            download_found = True
+        url_1080 = selected_movie.get(
+            "quality_1080p"
+        )
 
-        if movie.get("quality_1080p"):
+        size_1080 = selected_movie.get(
+            "file_size_1080p"
+        )
+
+        if url_1080:
+
+            download_available = True
 
             label = "⬇️ Download 1080p"
 
-            if movie.get("file_size_1080p"):
-                label += f" — {movie['file_size_1080p']}"
+            if size_1080:
+                label += f" • {size_1080}"
 
             st.link_button(
                 label,
-                movie["quality_1080p"],
-                use_container_width=True
+                url_1080,
+                width="stretch"
             )
 
-            download_found = True
-
-        if not download_found:
-            st.info("No download links available.")
+        if not download_available:
+            st.info(
+                "No download links are available for this movie yet."
+            )
 
     st.stop()
 
 
-# -------------------------
+# =====================================================
 # HOMEPAGE
-# -------------------------
+# =====================================================
+
 st.title("🎬 CinemaHub")
 
 st.caption(
     "Movies • Series • Entertainment"
 )
 
-# Search
+# =====================================================
+# SEARCH
+# =====================================================
+
 search = st.text_input(
     "🔎 Search Movies",
     placeholder="Search by movie name..."
 )
 
-# Categories
+# =====================================================
+# CATEGORY
+# =====================================================
+
 categories = sorted(
-    list(
-        set(
-            m["category"]
-            for m in movies
-            if m.get("category")
-        )
-    )
+    {
+        movie.get("category")
+        for movie in movies
+        if movie.get("category")
+    }
 )
 
-category_options = ["All"] + categories
+category_options = [
+    "All"
+] + categories
 
 selected_category = st.selectbox(
     "🎞️ Category",
     category_options
 )
 
-# -------------------------
-# FILTER
-# -------------------------
+# =====================================================
+# FILTER MOVIES
+# =====================================================
+
 filtered_movies = movies
 
 if search:
 
+    search_text = search.lower().strip()
+
     filtered_movies = [
-        m for m in filtered_movies
-        if search.lower() in m["title"].lower()
+        movie
+        for movie in filtered_movies
+        if search_text
+        in str(
+            movie.get("title") or ""
+        ).lower()
     ]
 
 if selected_category != "All":
 
     filtered_movies = [
-        m for m in filtered_movies
-        if m.get("category") == selected_category
+        movie
+        for movie in filtered_movies
+        if movie.get("category")
+        == selected_category
     ]
 
 
-# -------------------------
-# FEATURED
-# -------------------------
-featured_movies = [
-    m for m in filtered_movies
-    if m.get("featured")
-]
-
-if featured_movies:
-
-    st.markdown("---")
-    st.subheader("⭐ Featured")
-
-    featured_cols = st.columns(
-        min(4, len(featured_movies))
-    )
-
-    for i, movie in enumerate(featured_movies[:4]):
-
-        with featured_cols[i]:
-
-            if movie.get("poster_url"):
-                st.image(
-                    movie["poster_url"],
-                    use_container_width=True
-                )
-
-            st.markdown(
-                f"### {movie['title']}"
-            )
-
-            if st.button(
-                "View Movie",
-                key=f"featured_{movie['id']}",
-                use_container_width=True
-            ):
-                st.query_params["movie"] = movie["slug"]
-                st.rerun()
-
-
-# -------------------------
+# =====================================================
 # LATEST MOVIES
-# -------------------------
+# =====================================================
+
 st.markdown("---")
 st.subheader("🔥 Latest Movies")
 
@@ -297,50 +409,64 @@ else:
     for start in range(
         0,
         len(filtered_movies),
-        4
+        3
     ):
 
-        cols = st.columns(3)
+        cols = st.columns(
+            3,
+            gap="medium"
+        )
 
-        row = filtered_movies[start:start + 3]
+        row = filtered_movies[
+            start:start + 3
+        ]
 
         for index, movie in enumerate(row):
 
             with cols[index]:
 
-               if movie.get("poster_url"):
+                poster_url = movie.get(
+                    "poster_url"
+                )
 
-    st.markdown(
-        f"""
-        <div style="
-            width:100%;
-            height:420px;
-            overflow:hidden;
-            border-radius:12px;
-            background:#171a21;
-        ">
-            <img
-                src="{movie['poster_url']}"
-                style="
-                    width:100%;
-                    height:100%;
-                    object-fit:cover;
-                    object-position:center top;
-                "
-            >
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+                if poster_url:
+
+                    safe_poster = html.escape(
+                        str(poster_url),
+                        quote=True
+                    )
+
+                    st.markdown(
+                        f"""
+                        <div class="movie-poster">
+                            <img src="{safe_poster}">
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
                 else:
 
-                    st.info("🎬 No Poster")
+                    st.markdown(
+                        """
+                        <div class="no-poster">
+                            🎬 No Poster
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                movie_title = html.escape(
+                    str(
+                        movie.get("title")
+                        or "Untitled"
+                    )
+                )
 
                 st.markdown(
                     f"""
                     <div class="movie-title">
-                        {movie['title']}
+                        {movie_title}
                     </div>
                     """,
                     unsafe_allow_html=True
@@ -355,21 +481,65 @@ else:
 
                 if movie.get("language"):
                     movie_details.append(
-                        movie["language"]
+                        str(movie["language"])
+                    )
+
+                if movie.get("category"):
+                    movie_details.append(
+                        str(movie["category"])
                     )
 
                 if movie_details:
 
-                    st.caption(
-                        " • ".join(movie_details)
+                    safe_details = html.escape(
+                        " • ".join(
+                            movie_details
+                        )
                     )
+
+                    st.markdown(
+                        f"""
+                        <div class="movie-meta">
+                            {safe_details}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                rating = movie.get(
+                    "imdb_rating"
+                )
+
+                if rating:
+
+                    safe_rating = html.escape(
+                        str(rating)
+                    )
+
+                    st.markdown(
+                        f"""
+                        <div class="rating">
+                            ⭐ IMDb {safe_rating}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                movie_id = movie.get(
+                    "id",
+                    movie.get("slug")
+                )
 
                 if st.button(
                     "🎬 View Movie",
-                    key=f"movie_{movie['id']}",
-                    use_container_width=True
+                    key=f"movie_{movie_id}",
+                    width="stretch"
                 ):
 
-                    st.query_params["movie"] = movie["slug"]
+                    st.query_params[
+                        "movie"
+                    ] = movie["slug"]
 
                     st.rerun()
+
+        st.markdown("<br>", unsafe_allow_html=True)
