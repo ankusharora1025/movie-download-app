@@ -603,3 +603,5 @@ st.markdown("---")
 st.caption(
     "© 2026 CinemaHub • Movies • Series • Entertainment"
 )
+
+# CinemaHub deployment refresh
