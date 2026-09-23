@@ -308,12 +308,30 @@ else:
 
             with cols[index]:
 
-                if movie.get("poster_url"):
+               if movie.get("poster_url"):
 
-                    st.image(
-                        movie["poster_url"],
-                        use_container_width=True
-                    )
+    st.markdown(
+        f"""
+        <div style="
+            width:100%;
+            height:420px;
+            overflow:hidden;
+            border-radius:12px;
+            background:#171a21;
+        ">
+            <img
+                src="{movie['poster_url']}"
+                style="
+                    width:100%;
+                    height:100%;
+                    object-fit:cover;
+                    object-position:center top;
+                "
+            >
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
                 else:
 
