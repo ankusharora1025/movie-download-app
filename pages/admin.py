@@ -1,514 +1,605 @@
 import streamlit as st
 from supabase import create_client
-import re
-import time
 
+# =====================================================
+# PAGE CONFIG
+# =====================================================
 st.set_page_config(
-    page_title="Movie Admin",
-    page_icon="🔐",
-    layout="wide"
+    page_title="CinemaHub",
+    page_icon="🎬",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
+# =====================================================
+# SUPABASE
+# =====================================================
 supabase = create_client(
     st.secrets["SUPABASE_URL"],
-    st.secrets["SUPABASE_ADMIN_KEY"]
+    st.secrets["SUPABASE_KEY"]
 )
 
+# =====================================================
+# CUSTOM CSS
+# =====================================================
+st.markdown("""
+<style>
 
-# -------------------------
-# LOGIN
-# -------------------------
-st.title("🔐 Movie Admin Panel")
+/* Main container */
+.block-container {
+    max-width: 1450px;
+    padding-top: 1.5rem;
+    padding-bottom: 3rem;
+}
 
-password = st.text_input("Admin Password", type="password")
+/* Hide Streamlit default header */
+header[data-testid="stHeader"] {
+    background: transparent;
+}
 
-if not password:
-    st.info("Enter your admin password.")
+/* CinemaHub Header */
+.cinema-header {
+    background: linear-gradient(135deg, #111111, #252525);
+    padding: 22px 30px;
+    border-radius: 15px;
+    margin-bottom: 20px;
+}
+
+.cinema-logo {
+    font-size: 38px;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+.cinema-tagline {
+    color: #aaaaaa;
+    font-size: 14px;
+    margin-top: 3px;
+}
+
+/* Movie title */
+.movie-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-top: 8px;
+    margin-bottom: 2px;
+}
+
+/* Movie metadata */
+.movie-meta {
+    color: #999999;
+    font-size: 13px;
+    margin-bottom: 5px;
+}
+
+/* Rating */
+.rating {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* Buttons */
+div.stButton > button {
+    width: 100%;
+    border-radius: 8px;
+}
+
+div.stLinkButton > a {
+    width: 100%;
+    border-radius: 8px;
+}
+
+/* Section titles */
+.section-title {
+    font-size: 25px;
+    font-weight: 800;
+    margin-top: 15px;
+    margin-bottom: 15px;
+}
+
+/* Detail information */
+.movie-description {
+    font-size: 16px;
+    line-height: 1.7;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+
+    .cinema-logo {
+        font-size: 29px;
+    }
+
+    .cinema-header {
+        padding: 18px;
+    }
+
+    .movie-title {
+        font-size: 16px;
+    }
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# =====================================================
+# LOAD MOVIES
+# =====================================================
+try:
+
+    response = (
+        supabase
+        .table("movies")
+        .select("*")
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    movies = response.data or []
+
+except Exception as e:
+
+    st.error("Unable to load the movie library.")
+    st.code(str(e))
     st.stop()
 
-if password != st.secrets["ADMIN_PASSWORD"]:
-    st.error("Incorrect password.")
-    st.stop()
 
-st.success("Admin access granted")
+# =====================================================
+# HEADER
+# =====================================================
+st.markdown("""
+<div class="cinema-header">
 
-# -------------------------
-# HELPERS
-# -------------------------
-def create_slug(text):
-    text = text.lower().strip()
-    text = re.sub(r"[^a-z0-9]+", "-", text)
-    return text.strip("-")
+    <div class="cinema-logo">
+        🎬 CinemaHub
+    </div>
+
+    <div class="cinema-tagline">
+        Movies • Series • Entertainment
+    </div>
+
+</div>
+""", unsafe_allow_html=True)
 
 
-def upload_poster(poster, slug):
+# =====================================================
+# MOVIE DETAILS PAGE
+# =====================================================
+selected_slug = st.query_params.get("movie")
 
-    if not poster:
-        return None
+if selected_slug:
 
-    extension = poster.name.split(".")[-1].lower()
-
-    filename = f"{slug}-{int(time.time())}.{extension}"
-
-    supabase.storage.from_("movie-posters").upload(
-        filename,
-        poster.getvalue(),
-        {"content-type": poster.type}
+    movie = next(
+        (
+            movie
+            for movie in movies
+            if movie.get("slug") == selected_slug
+        ),
+        None
     )
 
-    return (
-        supabase.storage
-        .from_("movie-posters")
-        .get_public_url(filename)
+    if not movie:
+
+        st.error("Movie not found.")
+
+        if st.button("← Back to CinemaHub"):
+            st.query_params.clear()
+            st.rerun()
+
+        st.stop()
+
+    if st.button("← Back to CinemaHub"):
+
+        st.query_params.clear()
+        st.rerun()
+
+    st.markdown("---")
+
+    poster_column, information_column = st.columns(
+        [1, 2],
+        gap="large"
     )
 
-
-# -------------------------
-# TABS
-# -------------------------
-tab_add, tab_edit = st.tabs([
-    "➕ Add Movie",
-    "✏️ Edit / Delete Movie"
-])
-
-
-# =========================================================
-# ADD MOVIE
-# =========================================================
-with tab_add:
-
-    st.header("🎬 Add New Movie")
-
-    title = st.text_input(
-        "Movie Title",
-        key="add_title"
-    )
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        year = st.number_input(
-            "Year",
-            min_value=1900,
-            max_value=2100,
-            value=2026,
-            key="add_year"
-        )
-
-    with col2:
-        category = st.selectbox(
-            "Category",
-            [
-                "Bollywood",
-                "Hollywood",
-                "South Indian",
-                "Web Series",
-                "TV Show",
-                "Animation",
-                "Other"
-            ],
-            key="add_category"
-        )
-
-    with col3:
-        language = st.text_input(
-            "Language",
-            placeholder="Hindi / English / Tamil",
-            key="add_language"
-        )
-
-    description = st.text_area(
-        "Description",
-        key="add_description"
-    )
-
-    imdb_rating = st.text_input(
-        "IMDb Rating",
-        placeholder="Example: 7.8",
-        key="add_rating"
-    )
-
-    st.subheader("🖼️ Movie Poster")
-
-    poster = st.file_uploader(
-        "Upload Poster",
-        type=["jpg", "jpeg", "png", "webp"],
-        key="add_poster"
-    )
-
-    st.subheader("⬇️ Download Links")
-
-    url_480 = st.text_input(
-        "480p Download URL",
-        key="add_480"
-    )
-
-    size_480 = st.text_input(
-        "480p File Size",
-        placeholder="Example: 450 MB",
-        key="add_size_480"
-    )
-
-    url_720 = st.text_input(
-        "720p Download URL",
-        key="add_720"
-    )
-
-    size_720 = st.text_input(
-        "720p File Size",
-        placeholder="Example: 1.2 GB",
-        key="add_size_720"
-    )
-
-    url_1080 = st.text_input(
-        "1080p Download URL",
-        key="add_1080"
-    )
-
-    size_1080 = st.text_input(
-        "1080p File Size",
-        placeholder="Example: 2.4 GB",
-        key="add_size_1080"
-    )
-
-    featured = st.checkbox(
-        "Featured Movie",
-        key="add_featured"
-    )
-
-    if st.button(
-        "🚀 Publish Movie",
-        type="primary",
-        use_container_width=True
-    ):
-
-        if not title.strip():
-            st.error("Movie title is required.")
-            st.stop()
-
-        try:
-
-            # Timestamp prevents duplicate slugs
-            base_slug = create_slug(title)
-            slug = f"{base_slug}-{int(time.time())}"
-
-            poster_url = upload_poster(
-                poster,
-                slug
-            )
-
-            movie_data = {
-                "title": title.strip(),
-                "slug": slug,
-                "year": int(year),
-                "category": category,
-                "language": language.strip(),
-                "description": description.strip(),
-                "poster_url": poster_url,
-                "quality_480p": url_480.strip() or None,
-                "quality_720p": url_720.strip() or None,
-                "quality_1080p": url_1080.strip() or None,
-                "file_size_480p": size_480.strip() or None,
-                "file_size_720p": size_720.strip() or None,
-                "file_size_1080p": size_1080.strip() or None,
-                "imdb_rating": imdb_rating.strip() or None,
-                "featured": featured
-            }
-
-            supabase.table("movies").insert(
-                movie_data
-            ).execute()
-
-            st.success(
-                f"✅ {title} published successfully!"
-            )
-
-        except Exception as e:
-            st.error("Movie could not be published.")
-            st.code(str(e))
-
-
-# =========================================================
-# EDIT / DELETE
-# =========================================================
-with tab_edit:
-
-    st.header("✏️ Edit Existing Movie")
-
-    try:
-
-        response = (
-            supabase.table("movies")
-            .select("*")
-            .order("created_at", desc=True)
-            .execute()
-        )
-
-        movies = response.data or []
-
-    except Exception as e:
-
-        st.error("Could not load movies.")
-        st.code(str(e))
-        movies = []
-
-    if not movies:
-
-        st.info("No movies available.")
-
-    else:
-
-        movie_map = {
-            f"{m['title']} — ID {m['id']}": m
-            for m in movies
-        }
-
-        selected_name = st.selectbox(
-            "Select Movie",
-            list(movie_map.keys())
-        )
-
-        movie = movie_map[selected_name]
-
-        st.markdown("---")
-
-        edit_title = st.text_input(
-            "Movie Title",
-            value=movie.get("title") or "",
-            key=f"title_{movie['id']}"
-        )
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-
-            edit_year = st.number_input(
-                "Year",
-                min_value=1900,
-                max_value=2100,
-                value=int(movie.get("year") or 2026),
-                key=f"year_{movie['id']}"
-            )
-
-        categories = [
-            "Bollywood",
-            "Hollywood",
-            "South Indian",
-            "Web Series",
-            "TV Show",
-            "Animation",
-            "Other"
-        ]
-
-        current_category = movie.get("category")
-
-        if current_category not in categories:
-            categories.append(current_category)
-
-        with col2:
-
-            edit_category = st.selectbox(
-                "Category",
-                categories,
-                index=categories.index(current_category)
-                if current_category else 0,
-                key=f"category_{movie['id']}"
-            )
-
-        with col3:
-
-            edit_language = st.text_input(
-                "Language",
-                value=movie.get("language") or "",
-                key=f"language_{movie['id']}"
-            )
-
-        edit_description = st.text_area(
-            "Description",
-            value=movie.get("description") or "",
-            key=f"description_{movie['id']}"
-        )
-
-        edit_rating = st.text_input(
-            "IMDb Rating",
-            value=movie.get("imdb_rating") or "",
-            key=f"rating_{movie['id']}"
-        )
-
-        # -------------------------
-        # POSTER
-        # -------------------------
-        st.subheader("🖼️ Poster")
+    # POSTER
+    with poster_column:
 
         if movie.get("poster_url"):
 
             st.image(
                 movie["poster_url"],
-                width=250
-            )
-
-            st.caption(
-                "Upload a new poster only if you want to replace this one."
+                use_container_width=True
             )
 
         else:
 
-            st.warning(
-                "This movie currently has no poster."
+            st.info("🎬 Poster unavailable")
+
+    # INFORMATION
+    with information_column:
+
+        st.title(movie["title"])
+
+        metadata = []
+
+        if movie.get("year"):
+            metadata.append(str(movie["year"]))
+
+        if movie.get("language"):
+            metadata.append(movie["language"])
+
+        if movie.get("category"):
+            metadata.append(movie["category"])
+
+        if metadata:
+
+            st.caption(
+                " • ".join(metadata)
             )
 
-        new_poster = st.file_uploader(
-            "Upload / Replace Poster",
-            type=["jpg", "jpeg", "png", "webp"],
-            key=f"poster_{movie['id']}"
-        )
+        if movie.get("imdb_rating"):
 
-        # -------------------------
-        # DOWNLOAD LINKS
-        # -------------------------
-        st.subheader("⬇️ Download Links")
+            st.markdown(
+                f"⭐ **IMDb:** {movie['imdb_rating']}/10"
+            )
 
-        edit_480 = st.text_input(
-            "480p Download URL",
-            value=movie.get("quality_480p") or "",
-            key=f"480_{movie['id']}"
-        )
+        st.markdown("### About")
 
-        edit_size_480 = st.text_input(
-            "480p File Size",
-            value=movie.get("file_size_480p") or "",
-            key=f"size480_{movie['id']}"
-        )
+        if movie.get("description"):
 
-        edit_720 = st.text_input(
-            "720p Download URL",
-            value=movie.get("quality_720p") or "",
-            key=f"720_{movie['id']}"
-        )
+            st.markdown(
+                f"""
+                <div class="movie-description">
+                    {movie["description"]}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
-        edit_size_720 = st.text_input(
-            "720p File Size",
-            value=movie.get("file_size_720p") or "",
-            key=f"size720_{movie['id']}"
-        )
+        else:
 
-        edit_1080 = st.text_input(
-            "1080p Download URL",
-            value=movie.get("quality_1080p") or "",
-            key=f"1080_{movie['id']}"
-        )
-
-        edit_size_1080 = st.text_input(
-            "1080p File Size",
-            value=movie.get("file_size_1080p") or "",
-            key=f"size1080_{movie['id']}"
-        )
-
-        edit_featured = st.checkbox(
-            "Featured Movie",
-            value=bool(movie.get("featured")),
-            key=f"featured_{movie['id']}"
-        )
+            st.write(
+                "No description available."
+            )
 
         st.markdown("---")
 
-        update_col, delete_col = st.columns(2)
+        # =============================================
+        # DOWNLOAD OPTIONS
+        # =============================================
 
-        # -------------------------
-        # UPDATE
-        # -------------------------
-        with update_col:
+        st.subheader("⬇️ Download Options")
+
+        download_available = False
+
+        # 480P
+        if movie.get("quality_480p"):
+
+            label = "⬇️ Download 480p"
+
+            if movie.get("file_size_480p"):
+
+                label += (
+                    f" • {movie['file_size_480p']}"
+                )
+
+            st.link_button(
+                label,
+                movie["quality_480p"],
+                use_container_width=True
+            )
+
+            download_available = True
+
+        # 720P
+        if movie.get("quality_720p"):
+
+            label = "⬇️ Download 720p"
+
+            if movie.get("file_size_720p"):
+
+                label += (
+                    f" • {movie['file_size_720p']}"
+                )
+
+            st.link_button(
+                label,
+                movie["quality_720p"],
+                use_container_width=True
+            )
+
+            download_available = True
+
+        # 1080P
+        if movie.get("quality_1080p"):
+
+            label = "⬇️ Download 1080p"
+
+            if movie.get("file_size_1080p"):
+
+                label += (
+                    f" • {movie['file_size_1080p']}"
+                )
+
+            st.link_button(
+                label,
+                movie["quality_1080p"],
+                use_container_width=True
+            )
+
+            download_available = True
+
+        if not download_available:
+
+            st.info(
+                "Download links are not available yet."
+            )
+
+    st.stop()
+
+
+# =====================================================
+# SEARCH
+# =====================================================
+search = st.text_input(
+    "🔎 Search",
+    placeholder="Search movies and series...",
+    label_visibility="collapsed"
+)
+
+
+# =====================================================
+# CATEGORY FILTER
+# =====================================================
+available_categories = sorted(
+    {
+        movie["category"]
+        for movie in movies
+        if movie.get("category")
+    }
+)
+
+category_options = [
+    "All"
+] + available_categories
+
+selected_category = st.radio(
+    "Browse",
+    category_options,
+    horizontal=True,
+    label_visibility="collapsed"
+)
+
+
+# =====================================================
+# FILTER MOVIES
+# =====================================================
+filtered_movies = movies.copy()
+
+if search:
+
+    filtered_movies = [
+        movie
+        for movie in filtered_movies
+        if search.lower()
+        in movie.get("title", "").lower()
+    ]
+
+if selected_category != "All":
+
+    filtered_movies = [
+        movie
+        for movie in filtered_movies
+        if movie.get("category")
+        == selected_category
+    ]
+
+
+# =====================================================
+# FEATURED MOVIES
+# =====================================================
+featured_movies = [
+    movie
+    for movie in filtered_movies
+    if movie.get("featured")
+]
+
+if featured_movies:
+
+    st.markdown(
+        '<div class="section-title">'
+        '⭐ Featured Movies'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    featured_columns = st.columns(
+        min(4, len(featured_movies))
+    )
+
+    for index, movie in enumerate(
+        featured_movies[:4]
+    ):
+
+        with featured_columns[index]:
+
+            if movie.get("poster_url"):
+
+                st.image(
+                    movie["poster_url"],
+                    use_container_width=True
+                )
+
+            else:
+
+                st.info("🎬 No Poster")
+
+            st.markdown(
+                f"""
+                <div class="movie-title">
+                    {movie["title"]}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            meta = []
+
+            if movie.get("year"):
+                meta.append(str(movie["year"]))
+
+            if movie.get("language"):
+                meta.append(movie["language"])
+
+            if meta:
+
+                st.caption(
+                    " • ".join(meta)
+                )
+
+            if movie.get("imdb_rating"):
+
+                st.caption(
+                    f"⭐ {movie['imdb_rating']}/10"
+                )
 
             if st.button(
-                "💾 Update Movie",
-                type="primary",
+                "View Details",
+                key=f"featured_{movie['id']}",
                 use_container_width=True
             ):
 
-                try:
+                st.query_params["movie"] = (
+                    movie["slug"]
+                )
 
-                    poster_url = movie.get(
-                        "poster_url"
+                st.rerun()
+
+    st.markdown("---")
+
+
+# =====================================================
+# LATEST MOVIES
+# =====================================================
+st.markdown(
+    '<div class="section-title">'
+    '🔥 Latest Movies'
+    '</div>',
+    unsafe_allow_html=True
+)
+
+if not filtered_movies:
+
+    st.info(
+        "No movies found."
+    )
+
+else:
+
+    # 5 movies per row
+    movies_per_row = 5
+
+    for start in range(
+        0,
+        len(filtered_movies),
+        movies_per_row
+    ):
+
+        columns = st.columns(
+            movies_per_row
+        )
+
+        row_movies = filtered_movies[
+            start:start + movies_per_row
+        ]
+
+        for index, movie in enumerate(
+            row_movies
+        ):
+
+            with columns[index]:
+
+                # POSTER
+                if movie.get("poster_url"):
+
+                    st.image(
+                        movie["poster_url"],
+                        use_container_width=True
                     )
 
-                    if new_poster:
+                else:
 
-                        poster_url = upload_poster(
-                            new_poster,
-                            movie["slug"]
-                        )
-
-                    update_data = {
-                        "title": edit_title.strip(),
-                        "year": int(edit_year),
-                        "category": edit_category,
-                        "language": edit_language.strip(),
-                        "description": edit_description.strip(),
-                        "imdb_rating": edit_rating.strip() or None,
-                        "poster_url": poster_url,
-                        "quality_480p": edit_480.strip() or None,
-                        "quality_720p": edit_720.strip() or None,
-                        "quality_1080p": edit_1080.strip() or None,
-                        "file_size_480p": edit_size_480.strip() or None,
-                        "file_size_720p": edit_size_720.strip() or None,
-                        "file_size_1080p": edit_size_1080.strip() or None,
-                        "featured": edit_featured
-                    }
-
-                    supabase.table("movies").update(
-                        update_data
-                    ).eq(
-                        "id",
-                        movie["id"]
-                    ).execute()
-
-                    st.success(
-                        "✅ Movie updated successfully!"
+                    st.info(
+                        "🎬 No Poster"
                     )
 
-                except Exception as e:
+                # TITLE
+                st.markdown(
+                    f"""
+                    <div class="movie-title">
+                        {movie["title"]}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
-                    st.error(
-                        "Movie could not be updated."
+                # DETAILS
+                metadata = []
+
+                if movie.get("year"):
+
+                    metadata.append(
+                        str(movie["year"])
                     )
 
-                    st.code(str(e))
+                if movie.get("language"):
 
-        # -------------------------
-        # DELETE
-        # -------------------------
-        with delete_col:
+                    metadata.append(
+                        movie["language"]
+                    )
 
-            confirm_delete = st.checkbox(
-                "Confirm deletion",
-                key=f"confirm_{movie['id']}"
-            )
+                if metadata:
 
-            if st.button(
-                "🗑️ Delete Movie",
-                use_container_width=True,
-                disabled=not confirm_delete
-            ):
+                    st.markdown(
+                        f"""
+                        <div class="movie-meta">
+                            {" • ".join(metadata)}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
-                try:
+                # RATING
+                if movie.get("imdb_rating"):
 
-                    supabase.table(
-                        "movies"
-                    ).delete().eq(
-                        "id",
-                        movie["id"]
-                    ).execute()
+                    st.markdown(
+                        f"""
+                        <div class="rating">
+                            ⭐ {movie["imdb_rating"]}/10
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
-                    st.success(
-                        "🗑️ Movie deleted."
+                # VIEW
+                if st.button(
+                    "🎬 View Details",
+                    key=f"movie_{movie['id']}",
+                    use_container_width=True
+                ):
+
+                    st.query_params["movie"] = (
+                        movie["slug"]
                     )
 
                     st.rerun()
 
-                except Exception as e:
 
-                    st.error(
-                        "Movie could not be deleted."
-                    )
+# =====================================================
+# FOOTER
+# =====================================================
+st.markdown("---")
 
-                    st.code(str(e))
+st.caption(
+    "© 2026 CinemaHub • Movies • Series • Entertainment"
+)
