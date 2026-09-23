@@ -192,10 +192,10 @@ if selected_slug:
 # -------------------------
 # HOMEPAGE
 # -------------------------
-st.title("🎬 Movie Download")
+st.title("🎬 CinemaHub")
 
 st.caption(
-    "Browse our movie collection and choose your preferred quality."
+    "Movies • Series • Entertainment"
 )
 
 # Search
