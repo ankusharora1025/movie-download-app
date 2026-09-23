@@ -2,7 +2,7 @@ import streamlit as st
 from supabase import create_client
 
 st.set_page_config(
-    page_title="Movie Download",
+    page_title="CinemaHub",
     page_icon="🎬",
     layout="wide"
 )
