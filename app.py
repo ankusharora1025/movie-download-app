@@ -53,7 +53,7 @@ st.markdown(
 
     .movie-poster {
         width: 100%;
-        height: 420px;
+        height: 330px;
         overflow: hidden;
         border-radius: 14px;
         background: #171a21;
@@ -69,7 +69,7 @@ st.markdown(
 
     .no-poster {
         width: 100%;
-        height: 420px;
+        height: 330px;
         border-radius: 14px;
         background: #19324a;
         display: flex;
